@@ -1,0 +1,1305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+    <title>多彩心灵扭蛋机</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg: #fdf6ee;
+            --gold-start: #f0d080;
+            --gold-mid: #c8922a;
+            --gold-end: #8e6520;
+            --silver-start: #f8f8f8;
+            --silver-mid: #cccccc;
+            --silver-end: #999999;
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0; padding: 0;
+            display: flex; flex-direction: row; align-items: center;
+            justify-content: center; min-height: 100vh;
+            padding: 0 0 20px 0;
+            background: radial-gradient(ellipse at 20% 30%, rgba(255,200,200,0.18), transparent 50%),
+                        radial-gradient(ellipse at 80% 70%, rgba(150,200,255,0.18), transparent 50%),
+                        radial-gradient(ellipse at 50% 50%, rgba(200,180,255,0.12), transparent 70%),
+                        linear-gradient(160deg, #fdf6ee 0%, #f5eee6 100%);
+            font-family: SimSun, '宋体', serif;
+            overflow-x: hidden; overflow-y: auto;
+            gap: 0;
+            align-items: flex-start;
+        }
+
+        /* ── FLOATING DECORATIONS ── */
+        .deco-col {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            gap: 14px; padding: 10px 16px; width: 200px; flex-shrink: 1;
+        }
+        .deco-card {
+            background: rgba(255,255,255,0.72);
+            border: 1px solid rgba(200,180,160,0.3);
+            border-radius: 14px; padding: 12px 14px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.07);
+            max-width: 190px; text-align: center;
+            animation: floatCard 6s ease-in-out infinite alternate;
+        }
+        .deco-card:nth-child(2) { animation-delay: -2s; }
+        .deco-card:nth-child(3) { animation-delay: -4s; }
+        @keyframes floatCard {
+            0%   { transform: translateY(0px); }
+            100% { transform: translateY(-12px); }
+        }
+        .deco-card .dc-icon { font-size: 1.7rem; margin-bottom: 4px; }
+        .deco-card .dc-title { font-weight: 700; color: #7a5c3a; font-size: 0.82rem; margin-bottom: 3px; }
+        .deco-card .dc-text { color: #999; font-size: 0.72rem; line-height: 1.5; }
+
+        /* ── CENTER COLUMN ── */
+        .center-col {
+            display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            flex: 1; min-width: 0; position: relative;
+            padding: 0;
+        }
+
+        /* ── SCORE ── */
+        #score-panel {
+            background: white; padding: 8px 24px;
+            border-radius: 50px; box-shadow: 0 4px 18px rgba(0,0,0,0.07);
+            font-size: 18px; color: #888; font-weight: 700;
+            margin-bottom: 6px; z-index: 10;
+            border: 1.5px solid rgba(200,180,160,0.25);
+        }
+        #score-panel span { color: #c8922a; }
+
+        /* ── MACHINE WRAPPER ── */
+        .gacha-machine {
+            position: relative;
+            width: 320px;
+            display: flex; flex-direction: column; align-items: center;
+            filter: drop-shadow(0 20px 40px rgba(0,0,0,0.13));
+            zoom: 0.82;
+        }
+
+        /* Top cap */
+        .machine-cap {
+            width: 140px; height: 28px;
+            background: linear-gradient(180deg, var(--silver-start), var(--silver-mid), var(--silver-end));
+            border-radius: 50% 50% 8px 8px;
+            position: relative; z-index: 7;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.12);
+        }
+        .machine-cap::after {
+            content: '';
+            position: absolute; top: 4px; left: 50%; transform: translateX(-50%);
+            width: 60px; height: 8px;
+            background: rgba(255,255,255,0.6); border-radius: 4px;
+        }
+
+        /* Glass sphere */
+        #sphere-container {
+            width: 300px; height: 300px;
+            border-radius: 50%;
+            border: 5px solid rgba(255,255,255,0.85);
+            box-shadow:
+                inset 0 0 60px rgba(255,255,255,0.65),
+                inset -20px -20px 40px rgba(0,0,0,0.06),
+                0 10px 30px rgba(0,0,0,0.1),
+                0 0 0 3px rgba(200,180,160,0.2);
+            position: relative; z-index: 5; overflow: hidden;
+            margin-top: -8px;
+            background: rgba(240,248,255,0.25);
+        }
+        /* Glass shine overlay */
+        #sphere-container::before {
+            content: '';
+            position: absolute; z-index: 10; pointer-events: none;
+            top: 6%; left: 12%; width: 38%; height: 34%;
+            background: radial-gradient(ellipse, rgba(255,255,255,0.55) 0%, transparent 70%);
+            border-radius: 50%; transform: rotate(-20deg);
+        }
+
+        /* Metal neck */
+        .machine-neck {
+            width: 56px; height: 30px;
+            background: linear-gradient(90deg, var(--silver-end), var(--silver-start), var(--silver-mid), var(--silver-start), var(--silver-end));
+            margin-top: -2px; z-index: 4;
+            border-radius: 4px;
+        }
+
+        /* Machine base body */
+        .machine-base {
+            width: 260px;
+            background: linear-gradient(180deg, #fafafa 0%, #f0f0f0 60%, #e0e0e0 100%);
+            border-radius: 12px 12px 40px 40px;
+            box-shadow: 0 12px 35px rgba(0,0,0,0.1), inset 0 1px 0 rgba(255,255,255,0.8);
+            z-index: 3;
+            display: flex; flex-direction: column; align-items: center;
+            padding-bottom: 14px;
+            border: 1px solid rgba(200,200,200,0.5);
+        }
+
+        /* Chrome ring between neck and base */
+        .machine-ring {
+            width: 260px; height: 16px;
+            background: linear-gradient(90deg, #bbb, #eee, #fff, #eee, #bbb);
+            border-radius: 4px 4px 0 0;
+        }
+
+        /* Gold dial */
+        .dial-wrap { position: relative; margin-top: 14px; }
+        .dial {
+            width: 110px; height: 110px;
+            background: conic-gradient(from 0deg, #f0d080, #c8922a, #8e6520, #c8922a, #f0d080, #c8922a, #8e6520, #f0d080);
+            border-radius: 50%;
+            cursor: pointer;
+            box-shadow: 0 7px 0 #6d4c14, 0 12px 22px rgba(0,0,0,0.22);
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s, box-shadow 0.1s;
+            position: relative; overflow: hidden;
+            border: 3px solid #e8c870;
+        }
+        .dial::before {
+            content: '';
+            position: absolute; top: 8%; left: 18%; width: 35%; height: 22%;
+            background: rgba(255,255,255,0.32); border-radius: 50%; transform: rotate(-20deg);
+        }
+        .dial:active { transform: translateY(5px); box-shadow: 0 2px 0 #6d4c14, 0 6px 12px rgba(0,0,0,0.2); }
+        .dial-bar {
+            width: 70px; height: 18px;
+            background: linear-gradient(180deg, #fffbe6, #f0d080);
+            border-radius: 9px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+        }
+        .dial-label {
+            position: absolute; bottom: -22px; left: 50%; transform: translateX(-50%);
+            font-size: 11px; color: #aaa; white-space: nowrap; letter-spacing: 1px;
+        }
+
+        /* Coin slot */
+        .coin-slot-area {
+            margin-top: 12px;
+            width: 160px; height: 28px;
+            background: linear-gradient(180deg, #e0e0e0, #f0f0f0);
+            border-radius: 8px;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 2px 6px rgba(0,0,0,0.15);
+            border: 1px solid rgba(180,180,180,0.4);
+        }
+        .coin-slot {
+            width: 55px; height: 7px;
+            background: #222; border-radius: 4px;
+            box-shadow: inset 0 2px 4px #000;
+        }
+
+        /* Outlet */
+        .outlet-area {
+            margin-top: 8px;
+            width: 100px; height: 48px;
+            background: linear-gradient(180deg, #2a2a2a, #111);
+            border-radius: 10px 10px 22px 22px;
+            box-shadow: inset 0 6px 16px #000, 0 4px 10px rgba(0,0,0,0.2);
+            display: flex; align-items: center; justify-content: center;
+            position: relative; overflow: hidden;
+        }
+        .outlet-area::before {
+            content: '';
+            position: absolute; bottom: 0; left: 0; right: 0; height: 50%;
+            background: rgba(255,255,255,0.03); border-radius: 0 0 18px 18px;
+        }
+        /* Outlet glow when spinning */
+        .outlet-area.glowing {
+            box-shadow: inset 0 6px 16px #000, 0 4px 10px rgba(0,0,0,0.2),
+                        0 0 20px rgba(249,201,94,0.6);
+            animation: outletGlow 0.6s ease-in-out;
+        }
+        @keyframes outletGlow {
+            0%,100% { box-shadow: inset 0 6px 16px #000, 0 0 8px rgba(249,201,94,0.3); }
+            50%      { box-shadow: inset 0 6px 16px #000, 0 0 28px rgba(249,201,94,0.8); }
+        }
+
+        /* Machine feet */
+        .machine-feet {
+            display: flex; gap: 120px; margin-top: 6px;
+        }
+        .foot {
+            width: 44px; height: 14px;
+            background: linear-gradient(90deg, #bbb, #eee, #bbb);
+            border-radius: 0 0 8px 8px;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.12);
+        }
+
+        /* ── ZOOM BALL ── */
+        #zoom-ball {
+            position: fixed;
+            width: 70px; height: 70px;
+            border-radius: 50%;
+            display: none; z-index: 1000;
+            border: 4px solid rgba(255,255,255,0.9);
+            box-shadow: 0 0 40px rgba(0,0,0,0.18), inset 0 -6px 12px rgba(0,0,0,0.1);
+        }
+        #zoom-ball::before {
+            content: '';
+            position: absolute; top: 10%; left: 15%; width: 30%; height: 22%;
+            background: rgba(255,255,255,0.5); border-radius: 50%; transform: rotate(-20deg);
+        }
+
+        /* ── MODALS ── */
+        .overlay {
+            display: none; position: fixed; inset: 0;
+            background: rgba(0,0,0,0.35); backdrop-filter: blur(4px);
+            z-index: 1500; align-items: center; justify-content: center;
+        }
+        .overlay.active { display: flex; }
+
+        .modal {
+            width: min(380px, 92vw);
+            background: white; padding: 32px 28px;
+            border-radius: 28px; text-align: center;
+            box-shadow: 0 24px 70px rgba(0,0,0,0.22);
+            animation: popIn 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+            position: relative; overflow: hidden;
+        }
+        .modal::before {
+            content: '';
+            position: absolute; top: 0; left: 0; right: 0; height: 5px;
+            background: linear-gradient(90deg, #D4A5A5, #92A8D1, #B19CD9, #A7BEA9, #E8D7C0);
+        }
+        @keyframes popIn {
+            from { opacity: 0; transform: scale(0.75); }
+            to   { opacity: 1; transform: scale(1); }
+        }
+
+        .modal-tag {
+            display: inline-block; font-size: 11px; letter-spacing: 2px;
+            text-transform: uppercase; color: #bbb; margin-bottom: 8px;
+            background: #f7f7f7; border-radius: 20px; padding: 3px 12px;
+        }
+        #q-text {
+            font-family: SimSun, '宋体', serif;
+            font-size: 17px; color: #444; line-height: 1.75;
+            margin: 10px 0 22px;
+        }
+        .btn {
+            display: block; width: 100%; padding: 13px 16px; margin: 9px 0;
+            border: 2px solid #f0f0f0; border-radius: 14px;
+            cursor: pointer; font-size: 15px; transition: all 0.22s;
+            background: #fff; color: #555; text-align: left;
+            font-family: SimSun, '宋体', serif;
+        }
+        .btn-letter {
+            display: inline-block; width: 24px; height: 24px; line-height: 24px;
+            text-align: center; border-radius: 50%;
+            background: #f0f0f0; font-size: 12px; font-weight: 700;
+            margin-right: 8px; color: #888;
+        }
+        .btn:hover:not(:disabled) { background: #fafafa; border-color: #ddd; transform: translateY(-1px); }
+        .btn:disabled { cursor: default; }
+        .btn.correct { background: #e8f5e9 !important; border-color: #a7bea9 !important; color: #4a7a55 !important; }
+        .btn.correct .btn-letter { background: #a7bea9; color: white; }
+        .btn.wrong   { background: #fdecea !important; border-color: #d4a5a5 !important; color: #a04040 !important; }
+        .btn.wrong   .btn-letter { background: #d4a5a5; color: white; }
+        .btn.reveal  { background: #e8f5e9 !important; border-color: #a7bea9 !important; color: #4a7a55 !important; }
+        .btn.reveal  .btn-letter { background: #a7bea9; color: white; }
+
+        /* End modal */
+        .end-score-big {
+            font-size: 72px; font-weight: 900;
+            background: linear-gradient(135deg, #f0d080, #c8922a);
+            -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+            line-height: 1; margin: 8px 0 2px;
+        }
+        .end-score-label { color: #bbb; font-size: 13px; margin-bottom: 16px; }
+        .end-answer-box {
+            background: #f9f5f0; border-radius: 12px; padding: 12px 16px;
+            margin: 12px 0; text-align: left; border-left: 3px solid #a7bea9;
+        }
+        .end-answer-box .ans-label { font-size: 11px; color: #bbb; letter-spacing: 1px; margin-bottom: 4px; }
+        .end-answer-box .ans-val { color: #4a7a55; font-weight: 700; font-size: 15px; }
+        .end-tip { font-size: 13px; color: #aaa; margin-top: 4px; line-height: 1.6; }
+        .end-msg {
+            background: #f7f4f9; border-radius: 12px; padding: 14px 16px;
+            margin: 14px 0; font-size: 14px; color: #888;
+            line-height: 1.75; font-family: SimSun, '宋体', serif;
+            border-left: 3px solid #b19cd9;
+        }
+        .restart-btn {
+            width: 100%; padding: 14px; margin-top: 6px;
+            background: linear-gradient(135deg, #f0d080, #c8922a);
+            color: white; border: none; border-radius: 14px;
+            cursor: pointer; font-size: 16px; font-weight: 700;
+            font-family: SimSun, '宋体', serif;
+            box-shadow: 0 5px 18px rgba(200,146,42,0.35);
+            transition: transform 0.15s, box-shadow 0.15s;
+        }
+        .restart-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 22px rgba(200,146,42,0.45); }
+
+        /* Confetti canvas */
+        #confetti-canvas {
+            position: fixed; top: 0; left: 0;
+            width: 100%; height: 100%;
+            pointer-events: none; z-index: 9999;
+        }
+
+        
+
+        /* ══════════════════════════════════════
+           RESPONSIVE — 全设备自适应
+           > 1100px : 三列完整
+           800-1100px: 隐藏侧边卡，机器居中
+           < 800px  : 手机，机器缩放
+           < 480px  : 小手机，进一步缩小
+        ══════════════════════════════════════ */
+
+        /* 包裹器：让 body 居中，center-col 弹性 */
+        body { align-items: center; }
+
+        /* 侧边卡片：中等屏幕缩窄 */
+        @media (max-width: 1100px) {
+            .deco-col { width: 160px; padding: 12px; gap: 14px; }
+            .deco-card { padding: 12px 13px; }
+            .deco-card .dc-title { font-size: 0.82rem; }
+            .deco-card .dc-text  { font-size: 0.70rem; }
+        }
+
+        /* 隐藏侧边卡，机器居中 */
+        @media (max-width: 860px) {
+            .deco-col { display: none; }
+            body { flex-direction: column; justify-content: flex-start; align-items: center; padding-top: 16px; }
+            .center-col { width: 100%; padding: 0 0 80px; }
+        }
+
+        /* 手机：缩小扭蛋机用 zoom */
+        @media (max-width: 700px) {
+            :root { --mz: 0.85; }
+            #score-panel { font-size: 15px; padding: 7px 18px; }
+        }
+
+        @media (max-width: 520px) {
+            :root { --mz: 0.72; }
+            #score-panel { font-size: 14px; padding: 6px 16px; }
+        }
+
+        @media (max-width: 400px) {
+            :root { --mz: 0.60; }
+            #score-panel { font-size: 13px; padding: 5px 14px; }
+        }
+
+        @media (max-width: 340px) {
+            :root { --mz: 0.52; }
+        }
+
+        /* 弹窗自适应 */
+        @media (max-width: 600px) {
+            .modal { width: 94vw; padding: 22px 16px; border-radius: 18px; }
+            #q-text { font-size: 15px; margin-bottom: 14px; }
+            .btn { padding: 11px 12px; font-size: 13px; margin: 6px 0; }
+            .end-score-big { font-size: 54px; }
+            .end-msg { font-size: 13px; padding: 11px 13px; }
+            .restart-btn { padding: 12px; font-size: 14px; }
+        }
+
+        /* 横屏手机 */
+        @media (max-height: 480px) and (orientation: landscape) {
+            :root { --mz: 0.65; }
+            body { padding-top: 6px; }
+            .deco-col { display: none; }
+            #score-panel { font-size: 13px; margin-bottom: 6px; }
+        }
+
+        /* ── 倒计时 ── */
+        .timer-bar-wrap {
+            width: 100%; height: 6px;
+            background: #f0f0f0; border-radius: 3px;
+            margin-bottom: 14px; overflow: hidden;
+        }
+        #timer-bar {
+            height: 100%; border-radius: 3px;
+            background: linear-gradient(90deg, #a7bea9, #f0d080);
+            transition: width 1s linear, background 0.5s;
+        }
+        #timer-bar.warning { background: linear-gradient(90deg, #f0d080, #e07070); }
+        #timer-num {
+            text-align: center; font-size: 13px; color: #bbb;
+            margin-bottom: 10px; letter-spacing: 1px;
+        }
+        #timer-num.warning { color: #d06060; font-weight: bold; }
+
+        /* 第一次答错后的继续按钮 */
+        #continue-btn {
+            display: none;
+            width: 100%; padding: 13px; margin-top: 14px;
+            background: linear-gradient(135deg, #92A8D1, #B19CD9);
+            color: white; border: none; border-radius: 14px;
+            cursor: pointer; font-size: 15px; font-weight: 700;
+            font-family: SimSun, '宋体', serif;
+            box-shadow: 0 5px 18px rgba(146,168,209,0.4);
+            transition: transform 0.15s;
+            letter-spacing: 1px;
+        }
+        #continue-btn:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+
+<canvas id="confetti-canvas"></canvas>
+
+<!-- Left decorations -->
+<div class="deco-col">
+    <div class="deco-card">
+        <div class="dc-icon">🧠</div>
+        <div class="dc-title">镜像神经元</div>
+        <div class="dc-text">看到别人微笑，你的大脑会同步触发相同的感受——共情的神经基础。</div>
+    </div>
+    <div class="deco-card">
+        <div class="dc-icon">🌊</div>
+        <div class="dc-title">心流状态</div>
+        <div class="dc-text">当挑战与能力完美匹配，你会进入心流——时间仿佛静止的极致专注。</div>
+    </div>
+    <div class="deco-card">
+        <div class="dc-icon">💡</div>
+        <div class="dc-title">蔡格尼克效应</div>
+        <div class="dc-text">未完成的任务更难忘记，这就是你总记得没做完的事情的原因！</div>
+    </div>
+</div>
+
+<!-- Center: machine + score -->
+<div class="center-col">
+
+    <div id="score-panel">累计答对：<span id="score-val">0</span> 题 ✨</div>
+
+    <div class="gacha-machine" id="gacha-machine">
+
+        <!-- Top cap -->
+        <div class="machine-cap"></div>
+
+        <!-- Glass sphere with Matter.js -->
+        <div id="sphere-container"></div>
+
+        <!-- Neck -->
+        <div class="machine-neck"></div>
+
+        <!-- Base body -->
+        <div class="machine-base">
+            <div class="machine-ring"></div>
+
+            <div class="dial-wrap">
+                <div class="dial" id="dial" onclick="spin()">
+                    <div class="dial-bar"></div>
+                </div>
+                <div class="dial-label">转动扭蛋</div>
+            </div>
+
+            <div class="coin-slot-area">
+                <div class="coin-slot"></div>
+            </div>
+
+            <div class="outlet-area" id="outlet"></div>
+        </div>
+
+        <div class="machine-feet">
+            <div class="foot"></div>
+            <div class="foot"></div>
+        </div>
+
+    </div>
+</div>
+
+<!-- Right decorations -->
+<div class="deco-col">
+    <div class="deco-card">
+        <div class="dc-icon">💜</div>
+        <div class="dc-title">情绪调节</div>
+        <div class="dc-text">哭泣会释放内啡肽与催产素——这正是痛哭后感到莫名轻松的原因。</div>
+    </div>
+    <div class="deco-card">
+        <div class="dc-icon">🌸</div>
+        <div class="dc-title">感恩日记</div>
+        <div class="dc-text">每天写下3件感恩的事，坚持两周，幸福感可提升约25%！</div>
+    </div>
+    <div class="deco-card">
+        <div class="dc-icon">🎯</div>
+        <div class="dc-title">成长型思维</div>
+        <div class="dc-text">大脑在犯错瞬间学习效率最高——失败只是神经元重新配置的契机。</div>
+    </div>
+</div>
+
+<!-- Zoom ball -->
+<div id="zoom-ball"></div>
+
+<!-- Quiz overlay -->
+<div class="overlay" id="quiz-overlay">
+    <div class="modal" id="quizModal">
+        <div class="modal-tag">🎲 心理趣味问答</div>
+        <div id="timer-num">15</div>
+        <div class="timer-bar-wrap"><div id="timer-bar" style="width:100%"></div></div>
+        <div id="q-text"></div>
+        <div id="ans-box"></div>
+        <button id="continue-btn" onclick="handleContinue()">🎲 继续扭蛋</button>
+    </div>
+</div>
+
+<!-- End overlay -->
+<div class="overlay" id="end-overlay">
+    <div class="modal" id="endModal">
+        <div class="modal-tag" id="end-tag">游戏结束</div>
+        <div class="end-score-big" id="end-score">0</div>
+        <div class="end-score-label">答对题数</div>
+        <div class="end-answer-box" id="end-answer-box">
+            <div class="ans-label">✅ 正确答案</div>
+            <div class="ans-val" id="end-ans-val"></div>
+            <div class="end-tip" id="end-tip"></div>
+        </div>
+        <div class="end-msg" id="end-msg"></div>
+        <button class="restart-btn" onclick="resetForNextPlayer()">🌈 下一位继续！</button>
+    </div>
+</div>
+
+<script>
+    /* ═══════════════════════════════════════
+       DATA
+    ═══════════════════════════════════════ */
+    const COLORS = ['#D4A5A5','#92A8D1','#B19CD9','#F5E6C8','#A7C8B0','#F0B8A0','#9FD3C7','#E8B4D0'];
+
+    const QUESTIONS = [
+        {q:"大学生心理健康日是每年的哪一天？",a:["4月7日","5月25日","10月10日","3月22日"],c:1,tip:"5月25日谐音我爱我，提醒大学生关爱自己的心理健康。世界心理健康日是10月10日，两者要注意区分。"},
+        {q:"带喜欢的人坐过山车或看恐怖片，对方心跳加速可能误以为是爱上你，这叫什么效应？",a:["首因效应","曝光效应","吊桥效应","晕轮效应"],c:2,tip:"吊桥效应：人在生理唤醒（心跳加速）时，容易将紧张误归因为对旁边人的爱意，从而产生好感。"},
+        {q:"两个陌生人初次见面，往往第一印象最深刻，这叫什么效应？",a:["近因效应","首因效应","晕轮效应（光环效应）","曝光效应"],c:1,tip:"首因效应：最初获得的信息对整体判断影响最大。研究表明人在见面最初7秒就会形成印象。"},
+        {q:"每天早上对着镜子说我是最棒的，这种行为在心理学上属于？",a:["自恋型人格倾向","积极心理暗示（自我暗示）","认知偏差","补偿心理"],c:1,tip:"积极自我暗示能激活大脑奖励回路，长期坚持有助于提升自我效能感和自信心。"},
+        {q:"研究表明，即使不运动，只需在自然绿地待约多少分钟，就能显著减压？",a:["5分钟","10分钟","20分钟","45分钟"],c:2,tip:"公园20分钟效应：每天在户外自然环境待满20分钟，皮质醇（压力荷尔蒙）水平会明显下降。"},
+        {q:"看到大家都在排队买奶茶，你也跟着去排，这是什么心理？",a:["稀缺效应","从众心理","互惠原则","权威效应"],c:1,tip:"从众心理：人在不确定时会参考他人行为作为决策依据。阿希从众实验证明，超过75%的人会至少一次跟随多数人的错误选择。"},
+        {q:"一个人反复检查是否锁门、不停洗手，这属于哪种心理障碍？",a:["焦虑症","恐惧症","强迫症（OCD）","疑病症"],c:2,tip:"强迫症的核心是强迫思维与强迫行为的恶性循环：患者明知行为不合理却无法停止。暴露与反应预防疗法（ERP）是目前最有循证支持的治疗方法。"},
+        {q:"走极端、以偏概全、消极思维、自我评价过低，主要描述哪种心理状态的认知特征？",a:["广泛性焦虑症","强迫症","抑郁症","双相情感障碍"],c:2,tip:"贝克提出抑郁的认知三角：对自我、世界、未来的持续负面认知。认知行为疗法可以帮助识别并重构这些负面思维。"},
+        {q:"别人随便说一句话，你却反复回想、过度解读，久久无法平静，这叫什么？",a:["共情能力强","内耗心理/精神内耗","应激反应","移情作用"],c:1,tip:"精神内耗是指大脑持续进行无效的自我对话和反刍思维，消耗大量心理能量却没有实际产出。正念冥想是缓解内耗的有效策略。"},
+        {q:"失恋时越想忘掉Ta，脑海中反而越满是Ta——越压制念头、念头越疯狂，这叫什么？",a:["斯德哥尔摩效应","白熊效应（反弹效应）","聚光灯效应","蔡格尼克效应"],c:1,tip:"白熊效应由哈佛心理学家韦格纳提出：刻意压抑某个念头，大脑反而会更频繁地监控它是否出现，导致适得其反。接纳而非压抑，才是更有效的应对方式。"},
+        {q:"躺下准备入睡时，大脑反而变得异常活跃、思绪万千，导致失眠。这种现象叫什么？",a:["睡眠瘫痪症","睡前认知唤醒/反刍思维","快速眼动障碍","昼夜节律紊乱"],c:1,tip:"睡前认知唤醒是失眠最常见的心理原因。认知行为失眠疗法（CBT-I）打断这一恶性循环，效果优于药物且无副作用。"},
+        {q:"越害怕演讲时出错，大脑越容易短路，这种怕什么来什么的定律叫什么？",a:["蝴蝶效应","墨菲定律","破窗效应","习得性无助"],c:1,tip:"墨菲定律：过度关注负面结果会让大脑分配更多注意力去监测失误，反而干扰正常表现。"},
+        {q:"失恋时强制自己忘掉Ta，结果满脑子都是Ta。这种心理现象是？",a:["蔡格尼克效应","吊桥效应","白熊效应（反弹效应）","晕轮效应"],c:2,tip:"韦格纳实验：要求被试不要想白熊，结果白熊意象反而频繁出现。与其压抑，不如允许自己悲伤，情绪会自然流动过去。"},
+        {q:"追星或恋爱时觉得对方浑身光芒、连缺点都可爱，这种掩盖真实的心理现象叫什么？",a:["首因效应","聚光灯效应","晕轮效应（光环效应）","曝光效应"],c:2,tip:"晕轮效应由心理学家爱德华·桑戴克提出：对一个人某方面的强烈印象会扩散影响对其整体评价。这也是广告喜欢用明星代言的心理学原理。"},
+        {q:"人们常不自觉地认为自己的一举一动都在被他人注意，这种认知偏见叫什么？",a:["自我中心偏差","聚光灯效应","冒充者综合征","镜像效应"],c:1,tip:"聚光灯效应：我们高估了他人对我们的关注程度。实验表明，人们估计约50%同学注意到自己的尴尬，实际只有约25%。"},
+        {q:"明明很优秀，却总觉得成功靠运气，害怕被拆穿是骗子，这叫什么？",a:["自我妨碍","习得性无助","冒充者综合征（骗子综合征）","自我设限"],c:2,tip:"冒充者综合征由心理学家克兰斯和艾姆斯于1978年提出。研究显示约70%的人在一生中某阶段曾有此体验，连爱因斯坦也曾感到自己的成就名不副实。"},
+        {q:"人在压力状态下出现心跳加快、肌肉紧张、注意力集中等自动调节反应，叫什么？",a:["条件反射","应激反应（战斗或逃跑反应）","情感脆弱","心理防御"],c:1,tip:"应激反应（Fight-or-Flight）由生理学家坎农提出：大脑杏仁核感知威胁后触发肾上腺素和皮质醇释放，为身体做好战斗或逃跑的准备。"},
+        {q:"日有所思，夜有所梦——梦主要反映了人的什么？",a:["显意识","潜意识","超我","工作记忆"],c:1,tip:"弗洛伊德认为梦是通往潜意识的皇家大道。现代神经科学则认为做梦与记忆巩固和情绪处理密切相关，REM睡眠阶段大脑活跃度接近清醒状态。"},
+        {q:"易受外界影响而情绪大幅波动，时而极度高兴时而伤心流泪，这叫什么？",a:["双相情感障碍","边缘型人格","情感脆弱","神经质倾向"],c:2,tip:"情感脆弱是指情绪调节能力较弱，对外界刺激反应强烈且恢复慢。辩证行为疗法（DBT）中的情绪调节技能训练对此有显著帮助。"},
+        {q:"大扫除或小组作业时，人越多反而有人越偷懒划水，这叫什么？",a:["旁观者效应","从众心理","社会懈怠（社会惰化）","责任分散效应"],c:2,tip:"社会懈怠（Ringelmann效应）：法国工程师林格曼发现，拔河时人数越多，每人平均出力越少。解决方法：明确个人责任、公开记录个人贡献。"},
+        {q:"人的气质可以分为四种基本类型，即粘液质、抑郁质、多血质以及？",a:["独立质","严谨型","兴奋型","胆汁质"],c:3,tip:"希波克拉底提出四种气质：多血质（活泼型）、胆汁质（兴奋型）、粘液质（安静型）、抑郁质（抑制型）。气质是先天的神经活动类型，没有好坏之分。"},
+        {q:"在心理咨询的各种形式中，最主要而且最有效的方法是？",a:["电话咨询","面对面咨询","专题咨询","互联网咨询"],c:1,tip:"面对面咨询是心理咨询最主要、最有效的形式。咨询师能通过表情、肢体语言等非语言信息获得更全面信息，同时建立真实的治疗性关系。"},
+        {q:"当人的愿望受挫后，通过想象自己达到目的来满足，属于心理防御机制的哪一种？",a:["补偿","分离","幻想","升华"],c:2,tip:"幻想（白日梦）：通过想象中的满足缓解现实挫败感。与升华的区别：升华将受挫能量转化为实际的社会价值行为，而幻想停留在内心想象层面。"},
+        {q:"判断一种行为是正常还是变态，首先必须考虑哪个要素？",a:["家庭背景","职业类型","宗教信仰","文化背景"],c:3,tip:"文化相对性是判断心理异常的首要标准。同一行为在不同文化中可能截然相反。DSM-5也特别强调排除文化因素再作诊断。"},
+        {q:"妄自尊大、需要不断获得他人注意和赞美，这是哪种人格障碍的表现？",a:["自恋型人格障碍","反社会型人格障碍","偏执型人格障碍","表演型人格障碍"],c:0,tip:"自恋型人格障碍（NPD）核心特征：夸大自我重要性、对赞美有极度渴求、缺乏共情能力。心理动力学认为其根源往往是深层的自卑感，自大是一种防御外壳。"},
+        {q:"你走在街上，前方有人掉了一叠钱却没发现，你捡起来还给对方。根据心理学，这种行为最直接的驱动力通常被称为？",a:["幸存者偏差","利他行为","聚光灯效应","破窗效应"],c:1,tip:"利他行为是指不以获得外部奖励为目的、自愿帮助他人的行为。心理学研究表明，利他行为受共情能力、社会规范和道德认同感的共同驱动，助人时大脑会释放催产素，让自己也感到愉悦。"},
+        {q:"下列哪一种心理治疗最强调角色扮演？",a:["心理剧","意识训练","家庭治疗","团体支持治疗"],c:0,tip:"心理剧（Psychodrama）由雅各布·莫雷诺创立：让来访者通过扮演自己或他人，在舞台上重演生活场景，获得洞察和情绪宣泄。"},
+        {q:"根据公园20分钟效应，在公园待够20分钟后，哪种压力荷尔蒙水平会明显下降？",a:["肾上腺素","皮质醇","多巴胺","褪黑素"],c:1,tip:"皮质醇是主要压力激素，长期过高与焦虑、免疫力下降、记忆损伤有关。自然环境通过降低皮质醇来达到减压效果，这也是森林浴疗法的生理基础。"},
+        {q:"进入黑暗房间后，眼睛逐渐能看清周围事物，这在生理心理学中叫什么？",a:["明适应","暗适应","色觉异常","视觉后像"],c:1,tip:"暗适应：从亮处进入暗处，视杆细胞逐渐恢复对弱光的敏感度，约需20-30分钟完全适应。从暗处到亮处的明适应只需约1分钟。"},
+        {q:"大一综合征（空虚、焦虑、失眠等症状）中，下列哪个不是主要诱因？",a:["理想与现实的落差","对新环境的适应力弱","优势地位的丧失","生活过度挥霍产生罪恶感"],c:3,tip:"大一综合征的核心诱因是身份转换冲击：从高中学霸到大学新生，熟悉的环境消失，自我价值感需要重建。消费行为产生的罪恶感一般不是主要心理诱因。"},
+        {q:"考试焦虑主要属于哪方面的心理问题？",a:["情绪问题","气质问题","性格问题","行为问题"],c:0,tip:"考试焦虑是典型的情绪障碍，核心是对失败的过度担忧和恐惧。适度焦虑（叶克斯-多德森定律）能提升表现，过度焦虑才会干扰认知。"},
+        {q:"遭受挫折后，将愤怒发泄到比自己地位低或更弱小的对象身上（如被老板骂后回家踢猫），这在心理学上叫？",a:["投射效应","踢猫效应","登门槛效应","晕轮效应"],c:1,tip:"踢猫效应描述的是情绪的链式传递现象：负面情绪沿着社会地位由强至弱的方向层层传递，最终宣泄在无力反抗的对象身上。这提醒我们要觉察情绪来源，避免成为负能量的传递者。"},
+        {q:"为什么悲伤的音乐反而能治愈心情？这种以悲治悲让人感到被理解的过程叫？",a:["习得性无助","共情与宣泄效应","视错觉","审美疲劳"],c:1,tip:"悲伤音乐的治愈机制：共情（音乐理解了你的感受）+ 宣泄（情绪找到安全出口）+ 生理（慢节拍能降低心率）。亚里士多德2400年前就提出了悲剧净化理论。"},
+        {q:"影响人际关系相似性的诸多因素中，对关系影响最大的是？",a:["兴趣爱好","性格特征","知识水准","价值观念"],c:3,tip:"价值观相似性对人际关系的影响最为深远。相似吸引原则表明：价值观、世界观的一致使人感到被理解和认同。三观不合往往是关系破裂的根本原因。"},
+        {q:"对头脑中已有的表象进行加工改造、形成新形象的心理过程是？",a:["联想","幻想","想象","错觉"],c:2,tip:"想象是在原有表象基础上创造新形象的认知过程。爱因斯坦曾说：想象力比知识更重要，因为知识是有限的，而想象力概括着世界上的一切。"},
+        {q:"追求完美、将不完美等同于不值得被爱，自尊心脆弱、控制欲强，这是什么表现？",a:["自卑者","自负的人","完美主义者","偏执型人格"],c:2,tip:"完美主义（适应不良型）的核心信念是我必须完美才有价值。心理学家布伦纳·布朗研究发现，完美主义是羞耻感的保护盔甲：害怕因不完美而被批评或拒绝。"},
+        {q:"学校增进学生心理健康的主要途径是？",a:["心理健康教育","进行大规模心理问卷调查","心理咨询","心理治疗"],c:0,tip:"心理健康教育是预防性和发展性的，面向全体学生，是最主要的途径。三者构成三级预防体系：教育（预防）→咨询（干预）→治疗（矫正）。"},
+        {q:"有时产生这场景我好像经历过的感觉，这种似曾相识的心理现象叫？",a:["错觉","海马效应（既视感）","幻觉","联觉"],c:1,tip:"既视感（Deja vu）目前最被接受的解释是记忆错觉：大脑的熟悉感系统被意外激活，产生了我见过的错误信号，但实际上是全新场景。约60-80%的人曾有过这种体验。"},
+        {q:"感到愤怒想发火时，心理学家建议先在心里默数1到10，主要是为了？",a:["展示数学能力","给前额叶争取反应时间（理智接管情绪）","压抑情绪","转移注意力"],c:1,tip:"愤怒爆发时杏仁核劫持了大脑（杏仁核劫持理论）。默数10秒能让负责理性判断的前额叶皮层重新接管。这并非压抑情绪，而是给自己一个暂停键。"},
+        {q:"影响人际吸引的因素中，下列哪一个描述是错误的？",a:["接近性（住得近更容易成为朋友）","相似性（三观相近更容易亲近）","外貌吸引力（颜值有优势）","自尊水平（自尊高低影响吸引力）"],c:3,tip:"自尊水平本身并不是影响人际吸引的主要因素（研究结论不一致）。而接近性（曝光效应）、相似性、外貌吸引力才是人际吸引的核心因素。"},
+        {q:"冲突中双方都作出让步、相互妥协，这种调适方式叫？",a:["和解","妥协","容忍","调解"],c:0,tip:"和解是冲突双方通过互相让步达成新的平衡，是主动的、双向的。妥协偏重一方单方面退让；调解涉及第三方介入；容忍是克制己方情绪。"},
+        {q:"利他主义精神最准确的体现是？",a:["人不为我，我不为人","人为财死，鸟为食亡","辛苦我一个，幸福十万家","明哲保身，逃避责任"],c:2,tip:"利他主义是不求回报地为他人利益而行动的价值观。研究表明助人行为会激活大脑奖励回路，帮助别人也让自己快乐是有神经科学基础的。"},
+        {q:"下列不是情绪健康主要标志的是？",a:["情绪稳定","情绪基调愉快","经常处于兴奋开心状态","喜乐无常、情绪剧烈波动"],c:3,tip:"情绪健康不等于永远快乐，而是情绪稳定、有适当的愉快基调，并能对不同情境产生合适的情绪反应。喜乐无常反而是情绪调节障碍的信号。"},
+        {q:"因缺乏准备无法驾驭可怕情景时，所体验到的情绪是？",a:["快乐","悲哀","愤怒","恐惧"],c:3,tip:"恐惧是面对威胁且感到无力应对时的核心情绪，伴随逃跑或僵住的应激反应。焦虑是对未来不确定威胁的泛化恐惧，而恐惧更针对具体的、即时的危险情境。"},
+        {q:"动机和兴趣产生的基础是？",a:["感知觉","实践活动","需要","教育"],c:2,tip:"需要是动机的源头：有机体缺乏某种东西时产生需要，需要推动产生动机，动机引导行为。马斯洛需求层次理论、麦克利兰成就需求理论都以需要为核心。"},
+        {q:"智力的核心是什么？",a:["观察力","思维力","注意力","记忆力"],c:1,tip:"思维力（尤其是抽象思维和逻辑推理）被认为是智力的核心，它整合了感知、记忆、注意等所有认知资源。斯皮尔曼的g因素（一般智力因子）本质上也是抽象推理能力的体现。"},
+        {q:"对个体心理发展起主导作用的是？",a:["学校教育","遗传因素","社会环境","个人实践活动"],c:0,tip:"学校教育对心理发展起主导作用，因为它是有计划、有目的、有系统的影响。维果茨基的最近发展区理论指出，教育能在特定阶段内对潜能的开发方向起决定性引导作用。"},
+        {q:"勤奋、懒惰、谦虚、骄傲，这些反映的是人的哪种心理特征？",a:["能力","气质","性格","情感"],c:2,tip:"性格是个体在社会实践中形成的对现实的稳定态度和习惯化行为方式。勤奋/懒惰反映对工作的态度，谦虚/骄傲反映对他人的态度，性格是后天习得的。"},
+        {q:"下列哪个特征不属于神经衰弱的典型表现？",a:["容易疲劳","自我压迫感强","睡眠障碍","对生活完全丧失兴趣"],c:3,tip:"对生活完全丧失兴趣（快感缺失）是抑郁症的核心症状，不属于神经衰弱。神经衰弱的核心是精神疲劳与兴奋性增高并存：既容易疲劳，又容易激动，并伴有睡眠障碍。"},
+        {q:"通过科学的心理锻炼解决认知、情感、人格、社交等方面问题的活动是？",a:["心理训练","心理健康教育","心理服务","心理补偿"],c:0,tip:"心理训练是主动的、操作性的心理干预方式，包括放松训练、正念冥想、表象训练、认知重构等技术，广泛应用于运动心理学、军事心理学和临床心理学中。"},
+        {q:"以下哪项做法不利于睡眠？",a:["保持睡房光线较暗","规律定时运动（非睡前）","每晚定时上床","临睡前进行剧烈运动"],c:3,tip:"临睡前剧烈运动会升高体温和心率，激活交感神经系统，导致入睡困难。睡眠卫生建议：睡前2-3小时内避免剧烈运动，保持规律作息是改善睡眠最有效的方法之一。"},
+        {q:"心理咨询的基本原则是？",a:["替来访者做决定","有条件地尊重来访者","为来访者严格保密","对来访者行为作道德判断"],c:2,tip:"保密原则是心理咨询最基本的伦理准则。但保密有例外（破密原则）：当来访者有明确的自伤或伤害他人风险时，咨询师有法律和伦理义务采取保护措施。"},
+        {q:"正规的心理咨询应在哪里进行？",a:["咨询师家中","双方商定的咖啡馆","专业咨询室","来访者家中"],c:2,tip:"专业咨询室提供了物理安全（私密隔音）、心理安全（中立的治疗性空间）和专业性边界（避免关系混淆）。在公共场所或私人住所咨询，会模糊治疗关系与社交关系的边界。"},
+        {q:"心理学观点认为，大部分心理问题来源于？",a:["家庭内部矛盾","社会环境压力","人际关系处理不当","自身的内部冲突"],c:3,tip:"精神分析、人本主义、认知行为等主要流派均认同：大多数心理问题源于内部冲突，如欲望与道德的冲突、真实自我与理想自我的落差。外部因素是触发器，内部冲突才是核心。"},
+        {q:"MBTI中J（判断型）和P（感知型）的主要区别在于？",a:["社交能力的强弱","对待计划和秩序的态度","逻辑思维还是情感思维","能量来自内部还是外部"],c:1,tip:"J-P维度反映生活方式偏好：J型偏好计划、秩序、提前完成；P型偏好灵活、开放、随机应变。需注意MBTI是偏好描述工具，不是能力评估。"},
+        {q:"凡尔赛文学（低调炫耀）在心理学中体现了哪种防御机制？",a:["压抑","补偿","投射","升华"],c:1,tip:"补偿机制：在某方面感到不足（内心自卑）时，通过在另一方面展示优越来弥补。低调炫耀的心理结构是：深层自卑→用炫耀满足自尊→但又怕显得粗俗→于是采取不经意的方式。"},
+        {q:"全神贯注于某项活动（如绘画、编程）时，感觉时间飞逝且充满愉悦，这种状态叫？",a:["心流（Flow）","亢奋状态","高度专注力","沉思冥想"],c:0,tip:"心流（Flow）由心理学家契克森米哈伊提出：当挑战难度与个人能力完美匹配时进入极致专注状态，特征是忘记时间、忘记自我、充满内在满足感，是人类体验幸福感最高峰之一。"},
+        {q:"限时抢购、仅剩最后一件让人冲动购买，利用了哪种心理效应？",a:["稀缺效应","互惠原则","承诺一致性","权威效应"],c:0,tip:"稀缺效应：当资源被认为稀少时，其感知价值上升，并触发损失厌恶（我会错过！）。这是西奥迪尼《影响力》中的六大说服原则之一，意识到这种机制能帮助我们更理性消费。"},
+        {q:"颜色心理学中，哪种颜色被认为有抑制食欲的作用？",a:["红色","橙色","蓝色","黄色"],c:2,tip:"蓝色在自然界中极少出现在食物中（蓝色食物通常意味着腐败），因此进化上蓝色会抑制食欲。这也是为什么麦当劳、肯德基等快餐品牌大量使用红黄配色来促进食欲。"},
+        {q:"表现极高才华的人偶尔犯小错误，反而让人觉得更有魅力亲近，这叫什么效应？",a:["晕轮效应","出丑效应（犯错效应）","破窗效应","曝光效应"],c:1,tip:"出丑效应（Pratfall Effect）由社会心理学家埃略特·阿伦森提出：对于能力强的人，适度的失误增加其亲切感和可信度。但对能力普通的人，犯错只会降低好感。"}
+    ];
+
+
+    const ENCOURAGEMENTS = [
+        "没关系，每一次「错误」都是大脑在重新配置——你比昨天的自己更睿智了。",
+        "心理学告诉我们：失败只是成功在绕道。你的努力已经在神经元里留下了印记！",
+        "自我宽容是最强的心理韧性。给自己一个温暖的拥抱，然后再出发！",
+        "错误让记忆更深刻——这个知识点，你下次一定不会再忘记！",
+        "成长型思维说：结果不重要，重要的是你全力以赴过。你做到了！",
+        "大脑在犯错时学习效率最高。恭喜你，刚刚完成了一次高效的神经训练！",
+    ];
+
+    /* ═══════════════════════════════════════
+       STATE
+    ═══════════════════════════════════════ */
+    let currentScore = 0;
+    let isRunning = false;
+    let currentQ = null;
+    let wrongCount = 0; // 本局答错次数，满2次才结束
+
+    // 题目队列：全部60题打乱后依次出，每10题为一轮，保证每题都被抽到且轮间不重复
+    let globalPool = [];   // 全局大池（60题索引，打乱后依次消费）
+    let roundQueue = [];   // 当前轮的10题
+    let roundAnswered = 0; // 本轮已答题数
+
+    function shuffleArray(arr) {
+        const a = arr.slice();
+        for (let i = a.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [a[i], a[j]] = [a[j], a[i]];
+        }
+        return a;
+    }
+
+    function refillPool() {
+        // 把60题索引全部打乱放入大池
+        globalPool = shuffleArray([...Array(QUESTIONS.length).keys()]);
+    }
+
+    function buildRound() {
+        // 从大池取10题作为本轮，大池不足时重新填充
+        if (globalPool.length < 10) refillPool();
+        roundQueue = globalPool.splice(0, 10);
+        roundAnswered = 0;
+        updateScoreLabel();
+    }
+
+    function updateScoreLabel() {
+        document.getElementById('score-val').innerText = currentScore;
+        const panel = document.getElementById('score-panel');
+        const heartStr = wrongCount === 0 ? '❤️❤️' : '🖤❤️';
+        panel.innerHTML = '累计答对：<span id="score-val">' + currentScore + '</span> 题 ✨ &nbsp;<small style="font-size:13px;color:#bbb;font-weight:normal;">本轮第 ' + roundAnswered + ' / 10 题 &nbsp;' + heartStr + '</small>';
+    }
+
+    function getNextQuestion() {
+        if (roundQueue.length === 0) return null;
+        return QUESTIONS[roundQueue.shift()];
+    }
+
+    refillPool();   // 初始化大池
+    buildRound();   // 建立第一轮
+
+    /* ═══════════════════════════════════════
+       MATTER.JS PHYSICS
+    ═══════════════════════════════════════ */
+    const { Engine, Render, Runner, Bodies, Composite, Body } = Matter;
+
+    const engine = Engine.create({ gravity: { y: 1.2 } });
+    const sphereEl = document.getElementById('sphere-container');
+
+    const render = Render.create({
+        element: sphereEl,
+        engine: engine,
+        options: {
+            width: 300, height: 300,
+            background: 'transparent',
+            wireframes: false
+        }
+    });
+
+    /* Circular boundary walls (polygon of rectangles) */
+    const CX = 150, CY = 150, R = 145;
+    const WALL_COUNT = 48;
+    for (let i = 0; i < WALL_COUNT; i++) {
+        const angle = (i / WALL_COUNT) * Math.PI * 2;
+        Composite.add(engine.world, Bodies.rectangle(
+            CX + Math.cos(angle) * R,
+            CY + Math.sin(angle) * R,
+            50, 18,
+            { isStatic: true, angle: angle, render: { visible: false }, friction: 0.05 }
+        ));
+    }
+
+    /* Balls */
+    const balls = [];
+    const ballInitPositions = []; // 记录每个球的初始位置
+    for (let i = 0; i < 32; i++) {
+        const x = 80 + Math.random() * 140;
+        const y = 80 + Math.random() * 120;
+        ballInitPositions.push({ x, y });
+        const ball = Bodies.circle(
+            x, y,
+            16,
+            {
+                restitution: 0.72,
+                friction: 0.02,
+                frictionAir: 0.008,
+                render: {
+                    fillStyle: COLORS[Math.floor(Math.random() * COLORS.length)],
+                    strokeStyle: 'rgba(255,255,255,0.7)',
+                    lineWidth: 2
+                }
+            }
+        );
+        balls.push(ball);
+    }
+    Composite.add(engine.world, balls);
+
+    // 把球重置回初始位置和静止状态
+    function resetBalls() {
+        balls.forEach((ball, i) => {
+            const pos = ballInitPositions[i];
+            Body.setPosition(ball, { x: pos.x, y: pos.y });
+            Body.setVelocity(ball, { x: 0, y: 0 });
+            Body.setAngularVelocity(ball, 0);
+        });
+    }
+
+    Render.run(render);
+    Runner.run(Runner.create(), engine);
+
+    /* ═══════════════════════════════════════
+       SPIN / GACHA LOGIC
+    ═══════════════════════════════════════ */
+    function spin() {
+        if (isRunning) return;
+        if (roundQueue.length === 0) return;
+        sfxGacha(); // 本轮10题已用完（答错前不会到这里）
+        isRunning = true;
+
+        /* Animate dial */
+        const dial = document.getElementById('dial');
+        dial.style.transition = 'transform 0.6s cubic-bezier(0.25,0.46,0.45,0.94)';
+        dial.style.transform = 'rotate(360deg)';
+        setTimeout(() => { dial.style.transition = '0.1s'; dial.style.transform = 'rotate(0deg)'; }, 650);
+
+        /* Turbocharge balls */
+        balls.forEach(ball => {
+            Body.setVelocity(ball, {
+                x: (Math.random() - 0.5) * 22,
+                y: -(12 + Math.random() * 18)
+            });
+        });
+
+        /* Outlet glow */
+        const outlet = document.getElementById('outlet');
+        outlet.classList.add('glowing');
+        setTimeout(() => outlet.classList.remove('glowing'), 800);
+
+        /* Pick a question NOW so ball color can match */
+        currentQ = getNextQuestion();
+        roundAnswered++;
+        updateScoreLabel();
+
+        setTimeout(() => {
+            const color = COLORS[Math.floor(Math.random() * COLORS.length)];
+            popBall(color);
+        }, 900);
+    }
+
+    function popBall(color) {
+        const zb = document.getElementById('zoom-ball');
+        const machineRect = document.getElementById('gacha-machine').getBoundingClientRect();
+
+        /* Start position: at the outlet */
+        const startX = machineRect.left + machineRect.width / 2 - 35;
+        const startY = machineRect.bottom - 80;
+
+        zb.style.display = 'block';
+        zb.style.backgroundColor = color;
+        zb.style.boxShadow = `0 0 30px ${color}88, 0 0 60px ${color}44`;
+        zb.style.width = '70px';
+        zb.style.height = '70px';
+        zb.style.left = startX + 'px';
+        zb.style.top  = startY + 'px';
+        zb.style.transform = 'scale(0.2) rotate(0deg)';
+        zb.style.opacity = '1';
+        zb.style.transition = 'none';
+
+        /* Phase 1: roll out from outlet (drop down slightly) */
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                zb.style.transition = 'all 0.45s cubic-bezier(0.55, 0, 1, 0.45)';
+                zb.style.transform = 'scale(1) rotate(180deg)';
+                zb.style.top = (startY + 40) + 'px';
+            });
+        });
+
+        /* Phase 2: zoom to center of screen */
+        setTimeout(() => {
+            const vw = window.innerWidth, vh = window.innerHeight;
+            zb.style.transition = 'all 0.75s cubic-bezier(0.175, 0.885, 0.32, 1.275)';
+            zb.style.left  = (vw / 2 - 140) + 'px';
+            zb.style.top   = (vh / 2 - 140) + 'px';
+            zb.style.width  = '280px';
+            zb.style.height = '280px';
+            zb.style.transform = 'scale(1) rotate(720deg)';
+            zb.style.borderWidth = '8px';
+        }, 480);
+
+        /* Phase 3: show quiz */
+        setTimeout(() => {
+            zb.style.transition = 'opacity 0.3s';
+            zb.style.opacity = '0';
+            showQuiz();
+        }, 1350);
+    }
+
+    /* ═══════════════════════════════════════
+       QUIZ
+    ═══════════════════════════════════════ */
+    function showQuiz() {
+        const q = currentQ;
+        document.getElementById('q-text').innerText = q.q;
+        // hide tip from previous question
+        const tipBox = document.getElementById('inline-tip');
+        if (tipBox) tipBox.style.display = 'none';
+
+        const box = document.getElementById('ans-box');
+        box.innerHTML = '';
+        const labels = ['A','B','C','D'];
+
+        q.a.forEach((txt, i) => {
+            const btn = document.createElement('button');
+            btn.className = 'btn';
+            btn.innerHTML = `<span class="btn-letter">${labels[i]}</span>${txt}`;
+            btn.onclick = () => checkAns(btn, i, q.c, q);
+            box.appendChild(btn);
+        });
+
+        document.getElementById('quiz-overlay').classList.add('active');
+        sfxOpen();
+        // 启动15秒倒计时，超时视为答错
+        startTimer(() => {
+            // 禁用所有按钮
+            document.querySelectorAll('#ans-box .btn').forEach(b => { b.disabled = true; b.style.pointerEvents = 'none'; });
+            sfxTimeout();
+            // 显示正确答案
+            const q = currentQ;
+            let tipBox = document.getElementById('inline-tip');
+            if (!tipBox) {
+                tipBox = document.createElement('div');
+                tipBox.id = 'inline-tip';
+                tipBox.style.cssText = 'margin-top:14px;background:#f7f4f9;border-radius:12px;padding:13px 15px;font-size:13px;color:#888;line-height:1.75;text-align:left;border-left:3px solid #b19cd9;';
+                document.getElementById('quizModal').appendChild(tipBox);
+            }
+            wrongCount++;
+            updateScoreLabel();
+            document.querySelectorAll('#ans-box .btn')[q.c].classList.add('reveal');
+            const contBtn = document.getElementById('continue-btn');
+            if (wrongCount >= 2) {
+                tipBox.textContent = '⏰ 时间到！游戏结束。💡 ' + q.tip;
+                contBtn.textContent = '📊 查看结果';
+                contBtn.dataset.result = 'gameover';
+                contBtn._timeoutQ = q;
+            } else {
+                tipBox.textContent = '⏰ 时间到！还剩 1 次机会。💡 ' + q.tip;
+                contBtn.textContent = '🎲 继续扭蛋';
+                contBtn.dataset.result = 'wrong-once';
+            }
+            tipBox.style.display = 'block';
+            contBtn.style.display = 'block';
+        });
+    }
+
+    function checkAns(el, idx, correct, qData) {
+        clearTimer(); // 停止倒计时
+        sfxClick();
+        /* Disable all buttons */
+        document.querySelectorAll('#ans-box .btn').forEach(b => {
+            b.disabled = true;
+            b.style.pointerEvents = 'none';
+        });
+
+        // Show tip in both cases
+        let tipBox = document.getElementById('inline-tip');
+        if (!tipBox) {
+            tipBox = document.createElement('div');
+            tipBox.id = 'inline-tip';
+            tipBox.style.cssText = 'margin-top:14px;background:#f7f4f9;border-radius:12px;padding:13px 15px;font-size:13px;color:#888;line-height:1.75;text-align:left;border-left:3px solid #b19cd9;';
+            document.getElementById('quizModal').appendChild(tipBox);
+        }
+        tipBox.textContent = '💡 ' + qData.tip;
+        tipBox.style.display = 'block';
+
+        if (idx === correct) {
+            el.classList.add('correct');
+            currentScore++;
+            document.getElementById('score-val').innerText = currentScore;
+            if (currentScore === 5) {
+                setTimeout(sfxUnbelievable, 300);
+            } else if (currentScore === 3) {
+                setTimeout(sfxAmazing, 300);
+            } else {
+                setTimeout(sfxCorrect, 100);
+            }
+
+            /* Confetti on top layer */
+            const myConfetti = confetti.create(
+                document.getElementById('confetti-canvas'),
+                { resize: true, useWorker: false }
+            );
+            myConfetti({
+                particleCount: 160,
+                spread: 90,
+                origin: { y: 0.55 },
+                colors: ['#D4A5A5','#92A8D1','#B19CD9','#A7C8B0','#F0B8A0','#F5E6C8']
+            });
+
+            // 答对：显示继续按钮，由用户决定
+            const contBtn = document.getElementById('continue-btn');
+            if (roundAnswered >= 10) {
+                contBtn.textContent = '🎉 查看结果';
+            } else {
+                contBtn.textContent = '🎲 继续扭蛋';
+            }
+            contBtn.style.display = 'block';
+            // 标记答对状态供 handleContinue 使用
+            contBtn.dataset.result = 'correct';
+
+        } else {
+            sfxWrong();
+            wrongCount++;
+            el.classList.add('wrong');
+            /* Highlight correct answer */
+            document.querySelectorAll('#ans-box .btn')[correct].classList.add('correct');
+
+            updateScoreLabel(); // 更新心形显示
+            const contBtn = document.getElementById('continue-btn');
+            if (wrongCount >= 2) {
+                // 第二次答错，结束游戏
+                tipBox.textContent = '❌ 答错了！游戏结束。💡 ' + qData.tip;
+                contBtn.textContent = '📊 查看结果';
+                contBtn.dataset.result = 'gameover';
+            } else {
+                // 第一次答错，还有一次机会
+                tipBox.textContent = '❌ 答错了！还剩 1 次机会。💡 ' + qData.tip;
+                contBtn.textContent = '🎲 继续扭蛋';
+                contBtn.dataset.result = 'wrong-once';
+            }
+            contBtn.style.display = 'block';
+        }
+    }
+
+    /* ═══════════════════════════════════════
+       END SCREEN
+    ═══════════════════════════════════════ */
+    function showEnd(qData) {
+        const score = currentScore;
+        const isFullClear = (qData === null); // 答满10题全对通关
+        if (isFullClear) setTimeout(sfxGoodJob, 400);
+
+        const tags = ['再来一次！', '初次尝试！', '越来越好！', '相当不错！', '心理达人！🎉', '心理专家！🏆'];
+        const tagIdx = Math.min(score, tags.length - 1);
+
+        document.getElementById('end-tag').textContent = isFullClear ? '恭喜通关！🎉' : tags[tagIdx];
+        document.getElementById('end-score').textContent = score;
+
+        const ansBox = document.getElementById('end-answer-box');
+        if (isFullClear) {
+            ansBox.style.display = 'none';
+            document.getElementById('end-msg').textContent = '太厉害了！你在本轮10题中全部答对，是真正的心理学达人！继续探索更多心灵奥秘吧！';
+        } else {
+            ansBox.style.display = 'block';
+            document.getElementById('end-ans-val').textContent = qData.a[qData.c];
+            document.getElementById('end-tip').textContent   = qData.tip;
+            document.getElementById('end-msg').textContent   = ENCOURAGEMENTS[Math.floor(Math.random() * ENCOURAGEMENTS.length)];
+        }
+
+        document.getElementById('end-overlay').classList.add('active');
+
+        /* Burst of confetti if they got any right */
+        if (score > 0) {
+            setTimeout(() => {
+                const myConfetti = confetti.create(
+                    document.getElementById('confetti-canvas'),
+                    { resize: true, useWorker: false }
+                );
+                myConfetti({ particleCount: 200, spread: 100, origin: { y: 0.5 } });
+            }, 300);
+        }
+    }
+
+    /* ═══════════════════════════════════════
+       WEB AUDIO — 音效系统
+    ═══════════════════════════════════════ */
+    const AC = new (window.AudioContext || window.webkitAudioContext)();
+
+    function resumeAC() { if (AC.state === 'suspended') AC.resume(); }
+
+    // 工具：播放音调序列
+    function playTones(notes) {
+        resumeAC();
+        let t = AC.currentTime;
+        notes.forEach(([freq, dur, vol, type]) => {
+            const o = AC.createOscillator();
+            const g = AC.createGain();
+            o.connect(g); g.connect(AC.destination);
+            o.type = type || 'sine';
+            o.frequency.setValueAtTime(freq, t);
+            g.gain.setValueAtTime(vol || 0.3, t);
+            g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+            o.start(t); o.stop(t + dur);
+            t += dur * 0.85;
+        });
+    }
+
+    // 噪音工具（机械感）
+    function playNoise(dur, vol) {
+        resumeAC();
+        const buf = AC.createBuffer(1, AC.sampleRate * dur, AC.sampleRate);
+        const d = buf.getChannelData(0);
+        for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1);
+        const src = AC.createBufferSource();
+        src.buffer = buf;
+        const g = AC.createGain();
+        const f = AC.createBiquadFilter();
+        f.type = 'bandpass'; f.frequency.value = 800; f.Q.value = 0.5;
+        src.connect(f); f.connect(g); g.connect(AC.destination);
+        g.gain.setValueAtTime(vol || 0.15, AC.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001, AC.currentTime + dur);
+        src.start(); src.stop(AC.currentTime + dur);
+    }
+
+    // 1. 扭蛋机械音：齿轮转动感
+    function sfxGacha() {
+        resumeAC();
+        playNoise(0.18, 0.2);
+        setTimeout(() => playNoise(0.12, 0.18), 120);
+        setTimeout(() => playNoise(0.10, 0.15), 220);
+        // 金属碰撞
+        playTones([[440,0.08,0.2,'square'],[330,0.06,0.15,'square'],[220,0.05,0.1,'square']]);
+        setTimeout(() => {
+            playTones([[880,0.05,0.18,'square'],[660,0.08,0.12,'sawtooth']]);
+        }, 300);
+    }
+
+    // 2. 题目展开音：轻盈弹出感
+    function sfxOpen() {
+        playTones([
+            [523,0.08,0.2,'sine'],
+            [659,0.08,0.22,'sine'],
+            [784,0.12,0.25,'sine'],
+            [1047,0.18,0.2,'sine']
+        ]);
+    }
+
+    // 3. 点击选项音：清脆点击
+    function sfxClick() {
+        playTones([[1200,0.04,0.15,'square'],[900,0.03,0.1,'square']]);
+    }
+
+    // 4. 答对胜利音
+    function sfxCorrect() {
+        playTones([
+            [523,0.1,0.25,'sine'],
+            [659,0.1,0.25,'sine'],
+            [784,0.1,0.25,'sine'],
+            [1047,0.25,0.3,'sine']
+        ]);
+    }
+
+    // 5. 答错音
+    function sfxWrong() {
+        playTones([
+            [300,0.15,0.25,'sawtooth'],
+            [200,0.3,0.2,'sawtooth']
+        ]);
+    }
+
+    // 6. "Unbelievable!" — 答对5题（夸张上扬）
+    function sfxUnbelievable() {
+        // 语音合成
+        resumeAC();
+        if (window.speechSynthesis) {
+            const u = new SpeechSynthesisUtterance('Unbelievable!');
+            u.lang = 'en-US'; u.rate = 0.85; u.pitch = 1.3; u.volume = 1;
+            window.speechSynthesis.speak(u);
+        }
+        // 配套音效
+        setTimeout(() => {
+            playTones([
+                [392,0.08,0.2,'sine'],[494,0.08,0.2,'sine'],
+                [587,0.08,0.2,'sine'],[698,0.08,0.2,'sine'],
+                [880,0.08,0.2,'sine'],[1047,0.25,0.3,'sine'],
+                [1319,0.3,0.35,'sine']
+            ]);
+        }, 200);
+    }
+
+    // 6b. "Amazing!" — 答对3题
+    function sfxAmazing() {
+        resumeAC();
+        if (window.speechSynthesis) {
+            const u = new SpeechSynthesisUtterance('Amazing!');
+            u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.2; u.volume = 1;
+            window.speechSynthesis.speak(u);
+        }
+        setTimeout(() => {
+            playTones([
+                [523,0.09,0.2,'sine'],[659,0.09,0.22,'sine'],
+                [784,0.09,0.25,'sine'],[1047,0.2,0.3,'sine'],
+                [1319,0.28,0.32,'sine']
+            ]);
+        }, 180);
+    }
+
+    // 7. "Good job!" — 答完10题
+    function sfxGoodJob() {
+        resumeAC();
+        if (window.speechSynthesis) {
+            const u = new SpeechSynthesisUtterance('Good job!');
+            u.lang = 'en-US'; u.rate = 0.9; u.pitch = 1.2; u.volume = 1;
+            window.speechSynthesis.speak(u);
+        }
+        setTimeout(() => {
+            playTones([
+                [523,0.1,0.25,'sine'],[659,0.1,0.25,'sine'],
+                [784,0.1,0.25,'sine'],[1047,0.15,0.3,'sine'],
+                [784,0.08,0.2,'sine'],[1047,0.08,0.2,'sine'],
+                [1319,0.4,0.35,'sine']
+            ]);
+        }, 150);
+    }
+
+    // 8. 倒计时滴答音
+    function sfxTick() {
+        playTones([[880,0.04,0.08,'square']]);
+    }
+
+    // 9. 超时失败音
+    function sfxTimeout() {
+        playTones([
+            [440,0.12,0.2,'sawtooth'],
+            [330,0.12,0.2,'sawtooth'],
+            [220,0.3,0.25,'sawtooth']
+        ]);
+    }
+
+    /* ═══════════════════════════════════════
+       倒计时系统
+    ═══════════════════════════════════════ */
+    let timerInterval = null;
+    let timerSeconds = 15;
+
+    function startTimer(onTimeout) {
+        clearTimer();
+        timerSeconds = 15;
+        updateTimerUI();
+        timerInterval = setInterval(() => {
+            timerSeconds--;
+            updateTimerUI();
+            if (timerSeconds <= 5 && timerSeconds > 0) sfxTick();
+            if (timerSeconds <= 0) {
+                clearTimer();
+                onTimeout();
+            }
+        }, 1000);
+    }
+
+    function clearTimer() {
+        if (timerInterval) { clearInterval(timerInterval); timerInterval = null; }
+        // 重置 UI
+        const bar = document.getElementById('timer-bar');
+        const num = document.getElementById('timer-num');
+        if (bar) { bar.style.width = '100%'; bar.classList.remove('warning'); }
+        if (num) { num.textContent = '10'; num.classList.remove('warning'); }
+    }
+
+    function updateTimerUI() {
+        const bar = document.getElementById('timer-bar');
+        const num = document.getElementById('timer-num');
+        if (!bar || !num) return;
+        const pct = (timerSeconds / 15) * 100;
+        bar.style.width = pct + '%';
+        num.textContent = timerSeconds;
+        if (timerSeconds <= 3) {
+            bar.classList.add('warning');
+            num.classList.add('warning');
+        } else {
+            bar.classList.remove('warning');
+            num.classList.remove('warning');
+        }
+    }
+
+    /* ═══════════════════════════════════════
+       重置状态给下一位用户（不刷页面，题库池保持连续）
+    ═══════════════════════════════════════ */
+    function resetForNextPlayer() {
+        // 重置分数和状态
+        currentScore = 0;
+        isRunning = false;
+        currentQ = null;
+        wrongCount = 0;
+
+        // 重置音效语音
+        if (window.speechSynthesis) window.speechSynthesis.cancel();
+
+        // 关闭结束弹窗
+        document.getElementById('end-overlay').classList.remove('active');
+
+        // 关闭答题弹窗（以防万一）
+        document.getElementById('quiz-overlay').classList.remove('active');
+
+        // 清除倒计时
+        clearTimer();
+
+        // 重置扭蛋球
+        const zb = document.getElementById('zoom-ball');
+        zb.style.display = 'none';
+        zb.style.width = '70px'; zb.style.height = '70px';
+        zb.style.borderWidth = '4px'; zb.style.opacity = '1';
+
+        // 清除上一题解析
+        const tipBox = document.getElementById('inline-tip');
+        if (tipBox) tipBox.style.display = 'none';
+        document.getElementById('continue-btn').style.display = 'none';
+
+        // 重置结束弹窗内容（防止下一位看到上一位的答案）
+        document.getElementById('end-answer-box').style.display = 'none';
+
+        // 恢复扭蛋机里的球到初始位置
+        resetBalls();
+
+        // 建立新一轮（从全局池继续取题，保证不重复）
+        buildRound();
+
+        // 更新积分显示
+        updateScoreLabel();
+
+        // 解锁扭蛋按钮
+        document.getElementById('dial').style.pointerEvents = 'auto';
+        document.getElementById('dial').style.opacity = '1';
+    }
+
+    // 第一次答错后用户手动点击继续
+    function handleContinue() {
+        const contBtn = document.getElementById('continue-btn');
+        const result = contBtn.dataset.result || 'correct';
+        contBtn.style.display = 'none';
+        contBtn.dataset.result = '';
+
+        document.getElementById('quiz-overlay').classList.remove('active');
+        const tipBox = document.getElementById('inline-tip');
+        if (tipBox) tipBox.style.display = 'none';
+
+        // 重置扭蛋球
+        const zb = document.getElementById('zoom-ball');
+        zb.style.display = 'none';
+        zb.style.width = '70px'; zb.style.height = '70px';
+        zb.style.borderWidth = '4px';
+
+        if (result === 'gameover') {
+            // 超时或第二次答错 → 结算
+            const q = contBtn._timeoutQ || currentQ;
+            showEnd(q);
+        } else if (result === 'correct' && roundAnswered >= 10) {
+            // 答对且满10题 → 结算
+            showEnd(null);
+        } else {
+            // 答对继续 或 第一次答错继续
+            isRunning = false;
+        }
+    }
+</script>
+</body>
+</html>
